@@ -1,4 +1,3 @@
-import streamlit as st
 import cv2
 import numpy as np
 import os
@@ -7,14 +6,12 @@ import joblib
 from skimage.feature import graycomatrix, graycoprops
 from PIL import Image
 
-# Configuración de página de Streamlit
 st.set_page_config(
-    page_title="IA Fitosanitaria - Guayaba",
+    page_title="IA Fitosanitaria - Guayaba Avanzada",
     page_icon="🍂",
     layout="centered"
 )
 
-# --- 1. CARGA DE RECURSOS DEL SISTEMA ---
 @st.cache_resource
 def load_assets():
     try:
@@ -24,49 +21,61 @@ def load_assets():
             recs = json.load(f)
         return model, scaler, recs
     except Exception as e:
-        st.error(f"Error cargando los modelos o base de conocimientos: {e}")
+        st.error(f"Error cargando recursos: {e}")
         return None, None, None
 
 model, scaler, recomendaciones = load_assets()
 
-# --- 2. FUNCIONES DE PROCESAMIENTO DE IMAGEN ---
-def remove_background_streamlit(img_pil, target_size=(128, 128)):
+def remove_background_grabcut(img_pil, target_size=(128, 128)):
     """
-    Segmenta la hoja usando espacios de color HSV y operaciones morfológicas,
-    y reemplaza el fondo exterior con blanco puro.
+    Segmentación robusta de hojas utilizando una combinación de HSV y GrabCut
+    para remover fondos complejos del mundo real de manera efectiva.
     """
     img = np.array(img_pil)
-    # Convertir de RGB (PIL) a BGR (OpenCV)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    
     img = cv2.resize(img, (256, 256))
+    
+    # Crear una máscara inicial basada en verde/marrón/amarillo (tonos de hojas)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    
-    # Rangos para segmentar vegetación
     lower_bound = np.array([0, 10, 10])
-    upper_bound = np.array([180, 255, 245])
-    mask = cv2.inRange(hsv, lower_bound, upper_bound)
+    upper_bound = np.array([180, 255, 240])
+    mask_hsv = cv2.inRange(hsv, lower_bound, upper_bound)
     
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    # Configurar GrabCut
+    bgdModel = np.zeros((1, 65), np.float64)
+    fgdModel = np.zeros((1, 65), np.float64)
     
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    background_white = np.ones_like(img) * 255
+    # Definir un rectángulo que encierra la hoja central (asumiendo margen del 10%)
+    h, w = img.shape[:2]
+    rect = (int(w*0.1), int(h*0.1), int(w*0.8), int(h*0.8))
     
-    if contours:
-        largest_contour = max(contours, key=cv2.contourArea)
-        clean_mask = np.zeros_like(mask)
-        cv2.drawContours(clean_mask, [largest_contour], -1, 255, -1)
-        result = np.where(clean_mask[:, :, None] == 255, img, background_white)
-    else:
-        result = np.where(mask[:, :, None] == 255, img, background_white)
+    # Inicializar máscara GrabCut
+    mask_gc = np.zeros(img.shape[:2], np.uint8)
+    
+    # Utilizar la máscara HSV para guiar a GrabCut sobre qué es fondo seguro y qué es probable primer plano
+    mask_gc[mask_hsv == 0] = cv2.GC_BGD
+    mask_gc[mask_hsv == 255] = cv2.GC_PR_FGD
+    
+    try:
+        # Ejecutar GrabCut para refinar los bordes de la hoja
+        cv2.grabCut(img, mask_gc, rect, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_RECT)
+        # Crear máscara final de primer plano
+        mask_final = np.where((mask_gc == cv2.GC_FGD) | (mask_gc == cv2.GC_PR_FGD), 255, 0).astype('uint8')
+    except:
+        mask_final = mask_hsv
         
+    # Operaciones morfológicas para suavizar imperfecciones del contorno
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    mask_final = cv2.morphologyEx(mask_final, cv2.MORPH_CLOSE, kernel)
+    
+    # Aplicar máscara sobre fondo blanco puro
+    background_white = np.ones_like(img) * 255
+    result = np.where(mask_final[:, :, None] == 255, img, background_white)
+    
     result_resized = cv2.resize(result, target_size)
     return result_resized
 
 def extract_features_streamlit(img_segmented):
-    # Características de Color (RGB y HSV)
     mean_r = np.mean(img_segmented[:,:,2])
     std_r = np.std(img_segmented[:,:,2])
     mean_g = np.mean(img_segmented[:,:,1])
@@ -82,7 +91,6 @@ def extract_features_streamlit(img_segmented):
     mean_v = np.mean(hsv[:,:,2])
     std_v = np.std(hsv[:,:,2])
     
-    # Características de Textura (GLCM)
     gray = cv2.cvtColor(img_segmented, cv2.COLOR_BGR2GRAY)
     glcm = graycomatrix(gray, distances=[1], angles=[0, np.pi/4, np.pi/2, 3*np.pi/4], levels=256, symmetric=True, normed=True)
     
@@ -99,37 +107,30 @@ def extract_features_streamlit(img_segmented):
         contrast, dissimilarity, homogeneity, energy, correlation, ASM
     ]
 
-# --- 3. DISEÑO DE LA INTERFAZ DE USUARIO ---
-st.title("🍃 Diagnóstico Fitosanitario Inteligente")
-st.write("Suba una fotografía de una hoja de guayaba para detectar enfermedades mediante IA con remoción de ruido de fondo automática.")
+st.title("🍃 Diagnóstico Fitosanitario de Precisión")
+st.write("Monitoreo fitosanitario inteligente con segmentación GrabCut para la remoción robusta de ruidos de fondo en campo.")
 
-uploaded_file = st.file_uploader("Seleccione una imagen...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("Suba una imagen de la hoja afectada", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
     img_original = Image.open(uploaded_file)
     
-    # Layout de previsualización
     col1, col2 = st.columns(2)
     with col1:
-        st.image(img_original, caption="Imagen cargada", use_container_width=True)
+        st.image(img_original, caption="Fotografía de Campo", use_container_width=True)
         
-    with st.spinner("Preprocesando imagen y aislando la hoja..."):
-        img_seg = remove_background_streamlit(img_original)
+    with st.spinner("Aislando la estructura de la hoja con GrabCut..."):
+        img_seg = remove_background_grabcut(img_original)
         img_seg_rgb = cv2.cvtColor(img_seg, cv2.COLOR_BGR2RGB)
-    
+        
     with col2:
-        st.image(img_seg_rgb, caption="Hoja segmentada (Sin Fondo)", use_container_width=True)
+        st.image(img_seg_rgb, caption="Hoja Procesada (Fondo Blanco)", use_container_width=True)
         
     if model is not None and scaler is not None:
-        # Extracción y clasificación
         feats = extract_features_streamlit(img_seg)
         feats_scaled = scaler.transform([feats])
-        
         prediction = model.predict(feats_scaled)[0]
         
-        # Mapear predicción al formato de recomendaciones
-        # Las clases comunes en el dataset mapean a:
-        # 'healthy', 'anthracnose', 'red_rust', 'caterpillar_damage', 'spiraling_whitefly'
         mapping = {
             "healthy": "Guava_Healthy",
             "anthracnose": "Guava_Anthracnose",
@@ -141,18 +142,17 @@ if uploaded_file is not None:
         rec_key = mapping.get(prediction.lower(), "Guava_Healthy")
         info = recomendaciones.get(rec_key, recomendaciones["Guava_Healthy"])
         
-        # Desplegar resultados de diagnóstico
-        st.subheader(f"Resultado del Análisis: **{info['nombre_comun']}**")
+        st.subheader(f"Diagnóstico Estimado: **{info['nombre_comun']}**")
         
         if info['tipo'] == "Saludable":
-            st.success("¡Su cultivo se encuentra en excelentes condiciones!")
+            st.success("Hojas sin presencia de patologías de importancia económica.")
         else:
-            st.warning(f"Alerta de Fitopatología detectada de tipo: {info['tipo']}")
+            st.warning(f"Presencia de sintomatología de origen: {info['tipo']}")
             
-        # Ficha Agronómica estructurada
-        st.markdown("### 📋 Ficha de Medidas de Mitigación")
+        st.markdown("### 📋 Protocolo de Mitigación Agronómica")
         st.markdown(f"**1. Manejo Cultural:** {info['manejo_cultural']}")
-        st.markdown(f"**2. Alternativa Botánica:** {info['alternativa_botanica']}")
+        st.markdown(f"**2. Alternativa Botánica / Ecológica:** {info['alternativa_botanica']}")
         st.markdown(f"**3. Control Químico Responsable:** {info['control_quimico']}")
     else:
-        st.error("El modelo o el escalador no se cargaron correctamente.")
+        st.error("Error al cargar el cerebro predictivo de la IA (modelo_svm.pkl).")
+''')
