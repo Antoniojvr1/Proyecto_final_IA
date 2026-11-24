@@ -1,0 +1,30 @@
+{
+    "Guava_Healthy": {
+        "nombre_comun": "Guayaba Sana",
+        "tipo": "Saludable",
+        "manejo_cultural": "Mantener podas de aireación constantes y monitoreos de humedad semanales.",
+        "alternativa_botanica": "Aplicación foliar preventiva de purín de ortiga o extracto de ajo-ají.",
+        "control_quimico": "No requiere intervención con agroquímicos sintéticos."
+    },
+    "Guava_Anthracnose": {
+        "nombre_comun": "Antracnosis (Colletotrichum gloeosporioides)",
+        "tipo": "Fúngica",
+        "manejo_cultural": "Eliminar y quemar hojas y frutos caídos infectados para reducir el inóculo en el suelo. Podas de saneamiento.",
+        "alternativa_botanica": "Aplicar extracto de gobernadora (Larrea tridentata) o caldo bordelés al 1%.",
+        "control_quimico": "Aplicación responsable de fungicidas sistémicos autorizados como el Difenoconazol en caso de alta incidencia."
+    },
+    "Guava_Scab": {
+        "nombre_comun": "Roña o Sarna de la Guayaba (Pestalotiopsis psidii)",
+        "tipo": "Fúngica",
+        "manejo_cultural": "Evitar el exceso de riego por aspersión directo al follaje, mejorar drenaje de suelos.",
+        "alternativa_botanica": "Uso preventivo de bicarbonato de potasio mezclado con jabón potásico como adherente botánico.",
+        "control_quimico": "Tratamiento preventivo con Oxicloruro de Cobre o fungicidas protectantes como el Mancozeb."
+    },
+    "Guava_Red_Rust": {
+        "nombre_comun": "Roya Roja (Cephaleuros virescens)",
+        "tipo": "Alga parásita",
+        "manejo_cultural": "Reducir el sombreado del cultivo mediante podas y asegurar un buen espacio entre plantas.",
+        "alternativa_botanica": "Aplicaciones preventivas de fungicidas a base de cobre orgánico.",
+        "control_quimico": "Aplicación de caldos minerales de azufre micronizado."
+    }
+}
