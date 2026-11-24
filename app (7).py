@@ -1,3 +1,4 @@
+import streamlit as st
 import cv2
 import numpy as np
 import os
@@ -155,4 +156,4 @@ if uploaded_file is not None:
         st.markdown(f"**3. Control Químico Responsable:** {info['control_quimico']}")
     else:
         st.error("Error al cargar el cerebro predictivo de la IA (modelo_svm.pkl).")
-''')
+
